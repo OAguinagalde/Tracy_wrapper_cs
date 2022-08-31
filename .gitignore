@@ -1,0 +1,7 @@
+﻿obj
+bin
+tracy
+*.lib
+*.exp
+*.dll
+*.obj

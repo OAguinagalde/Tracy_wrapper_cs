@@ -1,5 +1,8 @@
+using System;
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
+
+using TraceLocation = tracy.TracyNative.___tracy_source_location_data;
 
 namespace tracy {
 
@@ -8,9 +11,9 @@ namespace tracy {
         [StructLayout(LayoutKind.Sequential)]
         public struct ___tracy_source_location_data
         {
-            public string name;
-            public string function;
-            public string file;
+            public IntPtr name;
+            public IntPtr function;
+            public IntPtr file;
             public uint line;
             public uint color;
 
@@ -80,9 +83,9 @@ namespace tracy {
         
         public static TracyNative.___tracy_c_zone_context Trace(ref TracyNative.___tracy_source_location_data loc, string name = null, uint color = 0, [CallerMemberName] string function = "unknown", [CallerFilePath] string file = "unknown", [CallerLineNumber] uint line = 0) {
             // System.Console.WriteLine($"loc {loc} func {function}, file {file}, line {line}, name {name}, color {color}");
-            loc.name = name;
-            loc.function = function;
-            loc.file = file;
+            loc.name = Marshal.StringToHGlobalAnsi(name);
+            loc.function = Marshal.StringToHGlobalAnsi(function);
+            loc.file = Marshal.StringToHGlobalAnsi(file);
             loc.line = line;
             loc.color = color;
             return TracyNative.wrapperStart(ref loc, 1);
@@ -104,24 +107,53 @@ namespace tracy {
             return TracyNative.MyTest(ref obj);
         }
     }
-    
+
     public static class Program {
         
-        static TracyNative.___tracy_source_location_data loc;
+        // For now we need to make the profiling locations static to ensure its lifetime...
+        // It shouldn't be a problem however as longs as long as we use them only on debugging builds
+        // TODO Oscar: Figure out how to get rid of this in a relatively performant way
+        static TraceLocation loc1;
+        static TraceLocation loc2;
+        static TraceLocation loc3;
         
         public static void Main(string[] args) {
 
             while (true) {
-                var context = Tracy.Trace(ref loc, "testArea");
+                // TODO Oscar: Figure out how to make this use a simpler syntax
+                using var _1 = Defer(ctx => Tracy.TraceEnd(ctx), Tracy.Trace(ref loc1, "testArea"));
                 
-                // Notes Oscar: For some reason, If I dont sleep(30), then it seems to work fine????
-                // WHY???????????????????? But not always tho, sometimes the name shows as "Frame" instead of testArea...
-                // Literally restarting the program with `dotnet run` and starting tracy.exe many times in a row and sometimes its good sometimes its not...
-                // System.Threading.Thread.Sleep(30);
-                
-                Tracy.TraceEnd(context);
-            }
+                wait(30);
 
+                if (true) {
+                    using var _2 = Defer(ctx => Tracy.TraceEnd(ctx), Tracy.Trace(ref loc2, "if"));
+                    
+                    wait(10);
+
+                    for (int i = 0; i < 20; i++) {
+                        using var _3 = Defer(ctx => Tracy.TraceEnd(ctx), Tracy.Trace(ref loc3, "for"));
+                    
+                        wait(10);
+                    
+                    }
+                }
+            }
+        }
+
+        // Notes Oscar: Defer mechanism in c# aparently can be kind of achieved!
+        // https://stu.dev/defer-with-csharp8/
+        static DeferDisposable<T> Defer<T>(Action<T> action, T param1) => new DeferDisposable<T>(action, param1);
+        internal readonly struct DeferDisposable<T1> : IDisposable {
+            readonly Action<T1> _action;
+            readonly T1 _param1;
+            public DeferDisposable(Action<T1> action, T1 param1) => (_action, _param1) = (action, param1);
+            public void Dispose() => _action.Invoke(_param1);
+        }
+
+        public static void wait(int ms) {
+            System.Threading.Thread.Sleep(ms);
         }
     }
+
+
 }

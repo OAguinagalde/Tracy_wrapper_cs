@@ -5,3 +5,5 @@ tracy
 *.exp
 *.dll
 *.obj
+*.pdb
+.vscode

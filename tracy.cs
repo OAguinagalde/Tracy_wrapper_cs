@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 
 using static utils.Utils;
-using TraceLocation = tracy.TracyNative.___tracy_source_location_data;
+using ProfileLocation = tracy.TracyNative.___tracy_source_location_data;
 
 namespace tracy {
 
@@ -82,7 +82,7 @@ namespace tracy {
 
     public static class Tracy {
         
-        public static TracyNative.___tracy_c_zone_context Trace(ref TracyNative.___tracy_source_location_data loc, string name = null, uint color = 0, [CallerMemberName] string function = "unknown", [CallerFilePath] string file = "unknown", [CallerLineNumber] uint line = 0) {
+        public static TracyNative.___tracy_c_zone_context ProfileStart(ref TracyNative.___tracy_source_location_data loc, string name = null, uint color = 0, [CallerMemberName] string function = "unknown", [CallerFilePath] string file = "unknown", [CallerLineNumber] uint line = 0) {
             // System.Console.WriteLine($"loc {loc} func {function}, file {file}, line {line}, name {name}, color {color}");
             loc.name = Marshal.StringToHGlobalAnsi(name);
             loc.function = Marshal.StringToHGlobalAnsi(function);
@@ -93,7 +93,7 @@ namespace tracy {
             // return TracyNative.___tracy_emit_zone_begin(ref loc, 1);
         }
 
-        public static void TraceEnd(TracyNative.___tracy_c_zone_context context) {
+        public static void ProfileEnd(TracyNative.___tracy_c_zone_context context) {
             TracyNative.wrapperEnd(context);
             // TracyNative.___tracy_emit_zone_end(context);
         }
@@ -114,25 +114,25 @@ namespace tracy {
         // For now we need to make the profiling locations static to ensure its lifetime...
         // It shouldn't be a problem however as longs as long as we use them only on debugging builds
         // TODO Oscar: Figure out how to get rid of this in a relatively performant way
-        static TraceLocation loc1;
-        static TraceLocation loc2;
-        static TraceLocation loc3;
+        static ProfileLocation loc1;
+        static ProfileLocation loc2;
+        static ProfileLocation loc3;
         
         public static void Main(string[] args) {
 
             while (true) {
                 // TODO Oscar: Figure out how to make this use a simpler syntax
-                using var _1 = Defer(ctx => Tracy.TraceEnd(ctx), Tracy.Trace(ref loc1, "testArea"));
+                using var _1 = Defer(ctx => Tracy.ProfileEnd(ctx), Tracy.ProfileStart(ref loc1, "testArea"));
                 
                 wait(30);
 
                 if (true) {
-                    using var _2 = Defer(ctx => Tracy.TraceEnd(ctx), Tracy.Trace(ref loc2, "if"));
+                    using var _2 = Defer(ctx => Tracy.ProfileEnd(ctx), Tracy.ProfileStart(ref loc2, "if"));
                     
                     wait(10);
 
                     for (int i = 0; i < 20; i++) {
-                        using var _3 = Defer(ctx => Tracy.TraceEnd(ctx), Tracy.Trace(ref loc3, "for"));
+                        using var _3 = Defer(ctx => Tracy.ProfileEnd(ctx), Tracy.ProfileStart(ref loc3, "for"));
                     
                         wait(10);
                     

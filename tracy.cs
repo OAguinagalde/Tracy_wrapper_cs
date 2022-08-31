@@ -70,7 +70,9 @@ namespace tracy
 
             while (true) {
                 var context = Tracy.Trace("myZone", "main", "tracy.cs", 77, 100);
-                System.Threading.Thread.Sleep(30);
+                // Adding this sleep makes it so that when connecting with tracy.exe or capturing with capture.exe, it breaks
+                // Without the sleep, it will kind of of work. sometimes.
+                // System.Threading.Thread.Sleep(30);
                 Tracy.TraceEnd(context);
             }
 

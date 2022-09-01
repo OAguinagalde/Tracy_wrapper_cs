@@ -3,15 +3,14 @@ using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 
 using static utils.Utils;
-using ProfileLocation = tracy.TracyNative.___tracy_source_location_data;
+using ZoneContext = tracy.TracyNative.___tracy_c_zone_context;
 
 namespace tracy {
 
     public static class TracyNative {
 
         [StructLayout(LayoutKind.Sequential)]
-        public struct ___tracy_source_location_data
-        {
+        public struct ___tracy_source_location_data {
             public IntPtr name;
             public IntPtr function;
             public IntPtr file;
@@ -29,10 +28,9 @@ namespace tracy {
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        public struct ___tracy_c_zone_context
-        {
-            public uint id;
-            public int active;
+        public readonly struct ___tracy_c_zone_context {
+            public readonly uint id;
+            public readonly int active;
 
             // Original:
             // struct ___tracy_c_zone_context {
@@ -50,101 +48,55 @@ namespace tracy {
         public static extern void ___tracy_emit_zone_end(___tracy_c_zone_context ctx);
         
         // Notes Oscar: You can find the code for this in `build-tracy-as-dll.cpp`.
-        // It literally just prints the content of the `___tracy_source_location_data` and calls the original `___tracy_emit_zone_begin`.
-        // It shows that data is reaching the "C side" properly, as everything shows fine, but somehow things still break?
-        // They break even more if I dont use this wrapper tho, no idea why...
+        // Made for debugging. It just prints the content of the `___tracy_source_location_data` and calls the original `___tracy_emit_zone_begin`.
+        // Original: ___tracy_c_zone_context wrapperStart(const struct ___tracy_source_location_data* loc, int active)
         [DllImport("tracy.dll", CharSet = CharSet.Ansi)]
         public static extern ___tracy_c_zone_context wrapperStart(ref ___tracy_source_location_data loc, int active);
-        // Original: ___tracy_c_zone_context wrapperStart(const struct ___tracy_source_location_data* loc, int active)
 
         // Notes Oscar: You can find the code for this in `build-tracy-as-dll.cpp`.
-        // It prints the content of the `___tracy_c_zone_context` and calls the original `___tracy_emit_zone_end`.
+        // Made for debugging. It prints the content of the `___tracy_c_zone_context` and calls the original `___tracy_emit_zone_end`.
+        // Original: void wrapperEnd(struct ___tracy_c_zone_context ctx)
         [DllImport("tracy.dll", CharSet = CharSet.Ansi)]
         public static extern void wrapperEnd(___tracy_c_zone_context ctx);
-        // Original: void wrapperEnd(struct ___tracy_c_zone_context ctx)
 
-        [StructLayout(LayoutKind.Sequential)]
-        public struct testStruct
-        {
-            public string name;
-            public string function;
-            public string file;
-            public uint line;
-            public uint color;
-        }
+    }
 
-        // Notes Oscar: Ignore this, this is just for me testing that lifetimes were working as I thought.
-        [DllImport("tracy.dll", CharSet = CharSet.Ansi)]
-        public static extern testStruct MyTest(ref testStruct obj);
-        // Original: testStruct MyTest(const testStruct* object)
-
+    public struct SourceLocation {
+        public TracyNative.___tracy_source_location_data data;
+        public bool isInitialized;
     }
 
     public static class Tracy {
-        
-        public static TracyNative.___tracy_c_zone_context ProfileStart(ref TracyNative.___tracy_source_location_data loc, string name = null, uint color = 0, [CallerMemberName] string function = "unknown", [CallerFilePath] string file = "unknown", [CallerLineNumber] uint line = 0) {
-            // System.Console.WriteLine($"loc {loc} func {function}, file {file}, line {line}, name {name}, color {color}");
-            loc.name = Marshal.StringToHGlobalAnsi(name);
-            loc.function = Marshal.StringToHGlobalAnsi(function);
-            loc.file = Marshal.StringToHGlobalAnsi(file);
-            loc.line = line;
-            loc.color = color;
-            return TracyNative.wrapperStart(ref loc, 1);
-            // return TracyNative.___tracy_emit_zone_begin(ref loc, 1);
+
+        public static TracyNative.___tracy_c_zone_context ProfileStart(ref SourceLocation loc, string name = null, uint color = 0, [CallerMemberName] string function = "unknown", [CallerFilePath] string file = "unknown", [CallerLineNumber] uint line = 0) {
+            if (!loc.isInitialized) {
+                loc.data.name = Marshal.StringToHGlobalAnsi(name);
+                loc.data.function = Marshal.StringToHGlobalAnsi(function);
+                loc.data.file = Marshal.StringToHGlobalAnsi(file);
+                loc.data.line = line;
+                loc.data.color = color;
+                loc.isInitialized = true;
+            }
+            return TracyNative.___tracy_emit_zone_begin(ref loc.data, 1);
         }
 
         public static void ProfileEnd(TracyNative.___tracy_c_zone_context context) {
-            TracyNative.wrapperEnd(context);
-            // TracyNative.___tracy_emit_zone_end(context);
+            TracyNative.___tracy_emit_zone_end(context);
         }
 
-        public static TracyNative.testStruct MyTestWrapper(ref TracyNative.testStruct obj, [CallerMemberName] string function = "unknown", [CallerFilePath] string file = "unknown", [CallerLineNumber] uint line = 0, string name = null, uint color = 0) {
-            // System.Console.WriteLine($"MyTestWrapper: testStruct {obj}, func {function}, file {file}, line {line}, name {name}, color {color}");
-            obj.name = name;
-            obj.function = function;
-            obj.file = file;
-            obj.line = line;
-            obj.color = color;
-            return TracyNative.MyTest(ref obj);
-        }
     }
 
-    public static class Program {
+    // Notes Oscar: based on tihs https://stu.dev/defer-with-csharp8/
+    public readonly struct ProfileScope : IDisposable {
         
-        // For now we need to make the profiling locations static to ensure its lifetime...
-        // It shouldn't be a problem however as longs as long as we use them only on debugging builds
-        // TODO Oscar: Figure out how to get rid of this in a relatively performant way
-        static ProfileLocation loc1;
-        static ProfileLocation loc2;
-        static ProfileLocation loc3;
+        private readonly ZoneContext ctx;
         
-        public static void Main(string[] args) {
-
-            while (true) {
-                // TODO Oscar: Figure out how to make this use a simpler syntax
-                using var _1 = Defer(ctx => Tracy.ProfileEnd(ctx), Tracy.ProfileStart(ref loc1, "testArea"));
-                
-                wait(30);
-
-                if (true) {
-                    using var _2 = Defer(ctx => Tracy.ProfileEnd(ctx), Tracy.ProfileStart(ref loc2, "if"));
-                    
-                    wait(10);
-
-                    for (int i = 0; i < 20; i++) {
-                        using var _3 = Defer(ctx => Tracy.ProfileEnd(ctx), Tracy.ProfileStart(ref loc3, "for"));
-                    
-                        wait(10);
-                    
-                    }
-                }
-            }
+        // TODO Oscar: check if using this is actually allocation when used like this...
+        // using var profiledScope = ProfileScope(ref codeLocation, "zoneName");
+        public ProfileScope(ref SourceLocation loc, string name = null, uint color = 0, [CallerMemberName] string function = "unknown", [CallerFilePath] string file = "unknown", [CallerLineNumber] uint line = 0) {
+            ctx = Tracy.ProfileStart(ref loc, name, color, function, file, line);
         }
-
-        public static void wait(int ms) {
-            System.Threading.Thread.Sleep(ms);
-        }
+        
+        public void Dispose() => Tracy.ProfileEnd(ctx);
     }
-
-
 }

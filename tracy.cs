@@ -86,7 +86,10 @@ namespace tracy {
 
     }
 
-    // Notes Oscar: based on tihs https://stu.dev/defer-with-csharp8/
+    // Notes Oscar: based on this https://stu.dev/defer-with-csharp8/
+    // Also, this: https://stackoverflow.com/questions/2412981/if-my-struct-implements-idisposable-will-it-be-boxed-when-used-in-a-using-statem/2413844#2413844
+    // Which measn that we can do this `using var ignoredVar = new ProfileScope(ref loc);` without boxing the struct, so when Dispose is called, its called on
+    // the original struct (as oposed to Dispose being called on a copy of the struct because boxing a value type copies the value)
     public readonly struct ProfileScope : IDisposable {
         
         private readonly ZoneContext ctx;

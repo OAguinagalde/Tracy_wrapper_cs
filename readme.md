@@ -39,6 +39,8 @@ Add a reference to this project, `dotnet add reference Tracy_wrapper_cs/Tracy_wr
 
 The class `tracy.TracyNative` wraps all the native calls, which will try to locate them during runtime in `tracy.dll`. You can easily build the dll for windows by executing the powershell script `Make-TracyDll.ps1` from a visual studio developer command prompt (since the script will call both `git.exe` and `cl.exe` to clone and build the dll). Finally move the dll to the folder where your application executable is located.
 
+> You can enter the visual studio developer command prompt by executing the script `> .\Start-VSDevCommandPromt.ps1 -vs2022`. Requires VS2022 or VS2019 to be installed.
+
 # Using the Profiler
 
 You can build the profiler GUI `Tracy.exe` easily from a visual studio developer command prompt. Locate the profiler's folder `> cd tracy/profiler/build/win32` and call `> msbuild.exe`. You can now start the profiler from `tracy/profiler/build/win32/x64/Debug/Tracy.exe`. Once started, it will automatically find your profiled application (if its running).

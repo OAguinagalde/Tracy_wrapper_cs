@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 
@@ -10,12 +11,22 @@ namespace tracy {
     public static class TracyNative {
 
         [StructLayout(LayoutKind.Sequential)]
-        public struct ___tracy_source_location_data {
-            public IntPtr name;
-            public IntPtr function;
-            public IntPtr file;
-            public uint line;
-            public uint color;
+        public class ___tracy_source_location_data {
+            public readonly IntPtr name;
+            public readonly IntPtr function;
+            public readonly IntPtr file;
+            public readonly uint line;
+            public readonly uint color;
+
+            public ___tracy_source_location_data(string name, uint color, string function, string file, uint line) {
+                // These 3 are allocating in unmanaged memory, and yes, it never gets freed.
+                // The reason is that it is required to always be available by tracy.
+                this.name = Marshal.StringToHGlobalAnsi(name);
+                this.function = Marshal.StringToHGlobalAnsi(function);
+                this.file = Marshal.StringToHGlobalAnsi(file);
+                this.line = line;
+                this.color = color;
+            }
 
             // Original:
             // struct ___tracy_source_location_data {
@@ -47,17 +58,17 @@ namespace tracy {
         [DllImport("tracy.dll", CharSet = CharSet.Ansi)]
         public static extern void ___tracy_emit_zone_end(___tracy_c_zone_context ctx);
         
-        // Notes Oscar: You can find the code for this in `build-tracy-as-dll.cpp`.
-        // Made for debugging. It just prints the content of the `___tracy_source_location_data` and calls the original `___tracy_emit_zone_begin`.
-        // Original: ___tracy_c_zone_context wrapperStart(const struct ___tracy_source_location_data* loc, int active)
+        // Original: TRACY_API void ___tracy_emit_frame_mark( const char* name )
         [DllImport("tracy.dll", CharSet = CharSet.Ansi)]
-        public static extern ___tracy_c_zone_context wrapperStart(ref ___tracy_source_location_data loc, int active);
+        public static extern void ___tracy_emit_frame_mark(IntPtr name);
 
-        // Notes Oscar: You can find the code for this in `build-tracy-as-dll.cpp`.
-        // Made for debugging. It prints the content of the `___tracy_c_zone_context` and calls the original `___tracy_emit_zone_end`.
-        // Original: void wrapperEnd(struct ___tracy_c_zone_context ctx)
+        // Original: TRACY_API void ___tracy_emit_plot( const char* name, double val )
         [DllImport("tracy.dll", CharSet = CharSet.Ansi)]
-        public static extern void wrapperEnd(___tracy_c_zone_context ctx);
+        public static extern void ___tracy_emit_plot(IntPtr name, double val);
+
+        // Original: TRACY_API void ___tracy_emit_message( const char* txt, size_t size, int callstack )
+        [DllImport("tracy.dll", CharSet = CharSet.Ansi)]
+        public static extern void ___tracy_emit_message(IntPtr name, UInt64 size, int callstack);
 
     }
 
@@ -68,20 +79,38 @@ namespace tracy {
 
     public static class Tracy {
 
-        public static TracyNative.___tracy_c_zone_context ProfileStart(ref SourceLocation loc, string name = null, uint color = 0, [CallerMemberName] string function = "unknown", [CallerFilePath] string file = "unknown", [CallerLineNumber] uint line = 0) {
-            if (!loc.isInitialized) {
-                loc.data.name = Marshal.StringToHGlobalAnsi(name);
-                loc.data.function = Marshal.StringToHGlobalAnsi(function);
-                loc.data.file = Marshal.StringToHGlobalAnsi(file);
-                loc.data.line = line;
-                loc.data.color = color;
-                loc.isInitialized = true;
-            }
-            return TracyNative.___tracy_emit_zone_begin(ref loc.data, 1);
+        private static ConcurrentDictionary<string, IntPtr> frames = new();
+        private static ConcurrentDictionary<string, IntPtr> plots = new();
+        private static ConcurrentDictionary<string, TracyNative.___tracy_source_location_data> sourceLocations = new();
+
+        // loc must be accesible at any time so you should probably make it a static value in the class with the longest lifetime
+        public static TracyNative.___tracy_c_zone_context ProfileStart(string name = null, uint color = 0, [CallerMemberName] string function = "unknown", [CallerFilePath] string file = "unknown", [CallerLineNumber] uint line = 0) {
+            var loc = sourceLocations.GetOrAdd($"{file}{line}", (_) => {
+                return new TracyNative.___tracy_source_location_data(name, color, function, file, line);
+            });
+            return TracyNative.___tracy_emit_zone_begin(ref loc, 1);
         }
 
         public static void ProfileEnd(TracyNative.___tracy_c_zone_context context) {
             TracyNative.___tracy_emit_zone_end(context);
+        }
+
+        public static void PlotValue(string name, double value) {
+            var cName = plots.GetOrAdd(name, (name) => { return Marshal.StringToHGlobalAnsi(name); });
+            TracyNative.___tracy_emit_plot(cName, value);
+        }
+
+        public static void FrameMark(string name) {
+            var cName = frames.GetOrAdd(name, (name) => { return Marshal.StringToHGlobalAnsi(name); });
+            TracyNative.___tracy_emit_frame_mark(cName);
+        }
+
+        public static void SendMessage(string message) {
+            var allocatedAnsiMessage = Marshal.StringToHGlobalAnsi(message);
+            // Unlike other tracy functions, this one actually allocates its own space to store the message so there
+            // is no need for us to keep the message in memory, so we free after this message
+            TracyNative.___tracy_emit_message(allocatedAnsiMessage, (UInt64)message.Length, 0);
+            Marshal.FreeHGlobal(allocatedAnsiMessage);
         }
 
     }
@@ -96,8 +125,8 @@ namespace tracy {
         
         // TODO Oscar: check if using this is actually allocation when used like this...
         // using var profiledScope = ProfileScope(ref codeLocation, "zoneName");
-        public ProfileScope(ref SourceLocation loc, string name = null, uint color = 0, [CallerMemberName] string function = "unknown", [CallerFilePath] string file = "unknown", [CallerLineNumber] uint line = 0) {
-            ctx = Tracy.ProfileStart(ref loc, name, color, function, file, line);
+        public ProfileScope(string name = null, uint color = 0, [CallerMemberName] string function = "unknown", [CallerFilePath] string file = "unknown", [CallerLineNumber] uint line = 0) {
+            ctx = Tracy.ProfileStart(name, color, function, file, line);
         }
         
         public void Dispose() => Tracy.ProfileEnd(ctx);

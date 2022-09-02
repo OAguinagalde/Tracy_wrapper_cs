@@ -1,6 +1,6 @@
 # A C# Wrapper for Tracy profiler
 
-This is not a fully featured wrapper, and more of a minimal setup for required for using features from Tracy in your C# project.
+This is not a fully featured wrapper, and more of a minimal setup using the Tracy profiler in your C# project. Also, it assumes 64 bit systems.
 
 Use the API like this (`test.cs`).
 

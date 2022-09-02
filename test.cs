@@ -9,10 +9,10 @@ public static class TestingProgram {
     public static void Main(string[] args) {
         while (true) {
             doSomeWork(30);
-            using var _1 = new ProfileScope("testProfiledScope");
+            using var _1 = new Tracy.ProfileScope("testProfiledScope");
 
             if (true) {
-                using var _2 = new ProfileScope("testPlots");
+                using var _2 = new Tracy.ProfileScope("testPlots");
                 Tracy.PlotValue("myPlot", new System.Random().NextDouble());
                 Tracy.SendMessage("finished the if...");
             }

@@ -3,15 +3,12 @@ using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 
-using static utils.Utils;
-using ZoneContext = tracy.TracyNative.___tracy_c_zone_context;
-
 namespace tracy {
 
     public static class TracyNative {
 
         [StructLayout(LayoutKind.Sequential)]
-        public class ___tracy_source_location_data {
+        public readonly struct ___tracy_source_location_data {
             public readonly IntPtr name;
             public readonly IntPtr function;
             public readonly IntPtr file;
@@ -72,36 +69,40 @@ namespace tracy {
 
     }
 
-    public struct SourceLocation {
-        public TracyNative.___tracy_source_location_data data;
-        public bool isInitialized;
-    }
-
     public static class Tracy {
 
         private static ConcurrentDictionary<string, IntPtr> frames = new();
         private static ConcurrentDictionary<string, IntPtr> plots = new();
-        private static ConcurrentDictionary<string, TracyNative.___tracy_source_location_data> sourceLocations = new();
 
-        // loc must be accesible at any time so you should probably make it a static value in the class with the longest lifetime
-        public static TracyNative.___tracy_c_zone_context ProfileStart(string name = null, uint color = 0, [CallerMemberName] string function = "unknown", [CallerFilePath] string file = "unknown", [CallerLineNumber] uint line = 0) {
-            var loc = sourceLocations.GetOrAdd($"{file}{line}", (_) => {
-                return new TracyNative.___tracy_source_location_data(name, color, function, file, line);
+        private static int srcLocCnt = 0;
+        private static ConcurrentDictionary<string, int> srcLocIndices = new();
+        private static TracyNative.___tracy_source_location_data[] sourceLocations = new TracyNative.___tracy_source_location_data[50];
+
+        // WARNING: for now it only allows up to 50 different locations at any time, its a wip lol
+        private static TracyNative.___tracy_c_zone_context ProfileStart(string name = null, uint color = 0, [CallerMemberName] string function = "unknown", [CallerFilePath] string file = "unknown", [CallerLineNumber] uint line = 0) {
+            var index = srcLocIndices.GetOrAdd($"{file}{line}", (_) => {
+                var i = srcLocCnt++;
+                sourceLocations[i] = new TracyNative.___tracy_source_location_data(name, color, function, file, line);
+                return i;
             });
-            return TracyNative.___tracy_emit_zone_begin(ref loc, 1);
+            return TracyNative.___tracy_emit_zone_begin(ref (sourceLocations[index]), 1);
         }
 
-        public static void ProfileEnd(TracyNative.___tracy_c_zone_context context) {
+        private static void ProfileEnd(TracyNative.___tracy_c_zone_context context) {
             TracyNative.___tracy_emit_zone_end(context);
         }
 
         public static void PlotValue(string name, double value) {
-            var cName = plots.GetOrAdd(name, (name) => { return Marshal.StringToHGlobalAnsi(name); });
+            var cName = plots.GetOrAdd(name, (name) => {
+                return Marshal.StringToHGlobalAnsi(name);
+            });
             TracyNative.___tracy_emit_plot(cName, value);
         }
 
         public static void FrameMark(string name) {
-            var cName = frames.GetOrAdd(name, (name) => { return Marshal.StringToHGlobalAnsi(name); });
+            var cName = frames.GetOrAdd(name, (name) => {
+                return Marshal.StringToHGlobalAnsi(name);
+            });
             TracyNative.___tracy_emit_frame_mark(cName);
         }
 
@@ -113,22 +114,21 @@ namespace tracy {
             Marshal.FreeHGlobal(allocatedAnsiMessage);
         }
 
-    }
-
-    // Notes Oscar: based on this https://stu.dev/defer-with-csharp8/
-    // Also, this: https://stackoverflow.com/questions/2412981/if-my-struct-implements-idisposable-will-it-be-boxed-when-used-in-a-using-statem/2413844#2413844
-    // Which measn that we can do this `using var ignoredVar = new ProfileScope(ref loc);` without boxing the struct, so when Dispose is called, its called on
-    // the original struct (as oposed to Dispose being called on a copy of the struct because boxing a value type copies the value)
-    public readonly struct ProfileScope : IDisposable {
-        
-        private readonly ZoneContext ctx;
-        
-        // TODO Oscar: check if using this is actually allocation when used like this...
-        // using var profiledScope = ProfileScope(ref codeLocation, "zoneName");
-        public ProfileScope(string name = null, uint color = 0, [CallerMemberName] string function = "unknown", [CallerFilePath] string file = "unknown", [CallerLineNumber] uint line = 0) {
-            ctx = Tracy.ProfileStart(name, color, function, file, line);
+        // Notes Oscar: based on this https://stu.dev/defer-with-csharp8/
+        // Also, this: https://stackoverflow.com/questions/2412981/if-my-struct-implements-idisposable-will-it-be-boxed-when-used-in-a-using-statem/2413844#2413844
+        // Which measn that we can do this `using var ignoredVar = new ProfileScope(ref loc);` without boxing the struct, so when Dispose is called, its called on
+        // the original struct (as oposed to Dispose being called on a copy of the struct because boxing a value type copies the value)
+        public readonly struct ProfileScope : IDisposable {
+            
+            private readonly TracyNative.___tracy_c_zone_context ctx;
+            
+            // TODO Oscar: check if using this is actually allocation when used like this...
+            // using var profiledScope = ProfileScope(ref codeLocation, "zoneName");
+            public ProfileScope(string name = null, uint color = 0, [CallerMemberName] string function = "unknown", [CallerFilePath] string file = "unknown", [CallerLineNumber] uint line = 0) {
+                ctx = Tracy.ProfileStart(name, color, function, file, line);
+            }
+            
+            public void Dispose() => Tracy.ProfileEnd(ctx);
         }
-        
-        public void Dispose() => Tracy.ProfileEnd(ctx);
     }
 }

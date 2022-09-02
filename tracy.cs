@@ -120,23 +120,32 @@ namespace tracy {
             Marshal.FreeHGlobal(allocatedAnsiMessage);
         }
 
+        public static ProfiledScope ProfileScope(string name = null, uint color = 0, [CallerMemberName] string function = "unknown", [CallerFilePath] string file = "unknown", [CallerLineNumber] uint line = 0) {
+            return new ProfiledScope(name, color, function, file, line);
+        }
+
         // Notes Oscar: based on this https://stu.dev/defer-with-csharp8/
         // Also, this: https://stackoverflow.com/questions/2412981/if-my-struct-implements-idisposable-will-it-be-boxed-when-used-in-a-using-statem/2413844#2413844
         // Which measn that we can do this `using var ignoredVar = new ProfileScope(ref loc);` without boxing the struct, so when Dispose is called, its called on
         // the original struct (as oposed to Dispose being called on a copy of the struct because boxing a value type copies the value)
-        public readonly struct ProfileScope : IDisposable {
+        public readonly struct ProfiledScope : IDisposable {
             
             private readonly TracyNative.___tracy_c_zone_context ctx;
             
-            public ProfileScope(string name = null, uint color = 0, [CallerMemberName] string function = "unknown", [CallerFilePath] string file = "unknown", [CallerLineNumber] uint line = 0) {
+            public ProfiledScope(string name = null, uint color = 0, [CallerMemberName] string function = "unknown", [CallerFilePath] string file = "unknown", [CallerLineNumber] uint line = 0) {
                 ctx = Tracy.ProfileStart(name, color, function, file, line);
             }
 
-            // TODO: somehow I can't define this:
-            // public ProfileScope() : this(null) {}
-            // And also, if I use new ProfileScope() it calls some non-existing constructor without implementation instead of my constructor...
-
-            public void Dispose() => Tracy.ProfileEnd(ctx);
+            public void Dispose() {
+                if (ctx.active == 0 && ctx.id == 0) {
+                    throw new Exception(
+                        "If you are seeing this Exception, it might mean that you created a ProfileScope like this " +
+                        "`new ProfileScope()`, but that is not allowed. Instead, if you want a default name for the scope, " +
+                        "call it like this `new ProfileScope(null)`."
+                    );
+                }
+                Tracy.ProfileEnd(ctx);
+            }
         }
     }
 }

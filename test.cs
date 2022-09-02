@@ -9,20 +9,17 @@ public static class TestingProgram {
     public static void Main(string[] args) {
         while (true) {
             doSomeWork(30);
-            using var _1 = new Tracy.ProfileScope("testProfiledScope");
+            using var _1 = Tracy.ProfileScope("testProfiledScope");
 
             if (true) {
-                using var _2 = new Tracy.ProfileScope("testPlots");
+                using var _2 = Tracy.ProfileScope("testPlots");
                 Tracy.PlotValue("myPlot", new System.Random().NextDouble());
                 Tracy.SendMessage("finished the if...");
             }
 
             for (int i = 0; i < 5; i++) {
 
-                // TODO: Why does this not work without making the first param null TT
-                // using var _3 = new Tracy.ProfileScope();
-
-                using var _3 = new Tracy.ProfileScope(null);
+                using var _3 = Tracy.ProfileScope();
                 doSomeWork(10);
             }
 

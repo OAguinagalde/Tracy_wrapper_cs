@@ -40,9 +40,15 @@ public static class TestingProgram {
 
 Add a reference to this project, `dotnet add reference Tracy_wrapper_cs/Tracy_wrapper_cs.csproj`.
 
-The class `tracy.TracyNative` wraps all the native calls, which will try to locate them during runtime in `tracy.dll`. You can easily build the dll for windows by executing the powershell script `Make-TracyDll.ps1` from a visual studio developer command prompt (since the script will call both `git.exe` and `cl.exe` to clone and build the dll). Finally move the dll to the folder where your application executable is located. Note that the script will compile `TracyClient.cpp` with only the minimum required defines `TRACY_ENABLE` and `TRACY_EXPORTS`. You can manually add others you might need and adapt the `tracy.TracyNative` to whatever other features you might want.
+The class `tracy.TracyNative` wraps all the native calls, which will try to locate them during runtime in `tracy.dll`. You can easily build the dll for windows by executing the powershell script `Make-TracyDll.ps1` from a visual studio developer command prompt (since the script will call both `git.exe` and `cl.exe` to clone and build the dll).
 
 > You can enter the visual studio developer command prompt by executing the script `> .\Start-VSDevCommandPromt.ps1 -vs2022`. Requires VS2022 or VS2019 to be installed.
+
+Note that the script will compile `TracyClient.cpp` with only the minimum required defines `TRACY_ENABLE` and `TRACY_EXPORTS`. You can manually add others you might need and adapt the `tracy.TracyNative` to whatever other features you might want.
+
+Finally move the dll to the folder where your application executable is located. When executing your application it will locate `tracy.dll` during runtime in its folder.
+
+> Tracy's sampling mechanism and other useful features will not work unless the process is running with privileges
 
 # Using the Profiler
 

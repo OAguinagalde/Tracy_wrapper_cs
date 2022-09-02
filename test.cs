@@ -17,6 +17,15 @@ public static class TestingProgram {
                 Tracy.SendMessage("finished the if...");
             }
 
+            for (int i = 0; i < 5; i++) {
+
+                // TODO: Why does this not work without making the first param null TT
+                // using var _3 = new Tracy.ProfileScope();
+
+                using var _3 = new Tracy.ProfileScope(null);
+                doSomeWork(10);
+            }
+
             Tracy.FrameMark("LoopEnd");
         }
     }

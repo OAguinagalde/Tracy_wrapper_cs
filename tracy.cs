@@ -81,9 +81,11 @@ namespace tracy {
         // WARNING: for now it only allows up to 50 different locations at any time, its a wip lol
         private static TracyNative.___tracy_c_zone_context ProfileStart(string name = null, uint color = 0, [CallerMemberName] string function = "unknown", [CallerFilePath] string file = "unknown", [CallerLineNumber] uint line = 0) {
             var index = srcLocIndices.GetOrAdd($"{file}{line}", (_) => {
-                var i = srcLocCnt++;
-                sourceLocations[i] = new TracyNative.___tracy_source_location_data(name, color, function, file, line);
-                return i;
+                lock (srcLocIndices) {
+                    var i = srcLocCnt++;
+                    sourceLocations[i] = new TracyNative.___tracy_source_location_data(name, color, function, file, line);
+                    return i;
+                };
             });
             return TracyNative.___tracy_emit_zone_begin(ref (sourceLocations[index]), 1);
         }
@@ -94,14 +96,18 @@ namespace tracy {
 
         public static void PlotValue(string name, double value) {
             var cName = plots.GetOrAdd(name, (name) => {
-                return Marshal.StringToHGlobalAnsi(name);
+                lock (plots) {
+                    return Marshal.StringToHGlobalAnsi(name);
+                }
             });
             TracyNative.___tracy_emit_plot(cName, value);
         }
 
         public static void FrameMark(string name) {
             var cName = frames.GetOrAdd(name, (name) => {
-                return Marshal.StringToHGlobalAnsi(name);
+                lock (frames) {
+                    return Marshal.StringToHGlobalAnsi(name);
+                }
             });
             TracyNative.___tracy_emit_frame_mark(cName);
         }
@@ -122,12 +128,14 @@ namespace tracy {
             
             private readonly TracyNative.___tracy_c_zone_context ctx;
             
-            // TODO Oscar: check if using this is actually allocation when used like this...
-            // using var profiledScope = ProfileScope(ref codeLocation, "zoneName");
             public ProfileScope(string name = null, uint color = 0, [CallerMemberName] string function = "unknown", [CallerFilePath] string file = "unknown", [CallerLineNumber] uint line = 0) {
                 ctx = Tracy.ProfileStart(name, color, function, file, line);
             }
-            
+
+            // TODO: somehow I can't define this:
+            // public ProfileScope() : this(null) {}
+            // And also, if I use new ProfileScope() it calls some non-existing constructor without implementation instead of my constructor...
+
             public void Dispose() => Tracy.ProfileEnd(ctx);
         }
     }

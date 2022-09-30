@@ -60,6 +60,8 @@ Finally move the dll to the folder where your application executable is located.
 
 You can build the profiler GUI `Tracy.exe` easily from a visual studio developer command prompt. Locate the profiler's folder `> cd tracy/profiler/build/win32` and call `> msbuild.exe /p:Configuration=Release`. You can now start the profiler from `tracy/profiler/build/win32/x64/Release/Tracy.exe`. Once started, it will automatically find your profiled application (if its running).
 
+If you have any issue building the profiler, you might be missing some dependency which can easily be installed using the visual studio installation tool and selecting the desktop c++ development tools.
+
 # Testing
 
 `test.cs` contains a main method which will just test the wrapper, so you can easily test this by calling `Make-TracyDll.ps1` and then directly calling `dotnet run` from a visual studio developer command prompt, and then opening `Tracy.exe`

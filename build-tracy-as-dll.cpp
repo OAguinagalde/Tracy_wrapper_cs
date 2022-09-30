@@ -6,4 +6,5 @@
 
 #define TRACY_ENABLE
 #define TRACY_EXPORTS
+#define TRACY_FIBERS
 #include "tracy/public/TracyClient.cpp"

@@ -67,10 +67,18 @@ namespace tracy {
         [DllImport("tracy.dll", CharSet = CharSet.Ansi)]
         public static extern void ___tracy_emit_message(IntPtr name, UInt64 size, int callstack);
 
+        // Original: TRACY_API void ___tracy_fiber_enter( const char* fiber );
+        [DllImport("tracy.dll", CharSet = CharSet.Ansi)]
+        public static extern void ___tracy_fiber_enter(IntPtr fiber);
+
+        // Original: TRACY_API void ___tracy_fiber_leave( void );
+        [DllImport("tracy.dll", CharSet = CharSet.Ansi)]
+        public static extern void ___tracy_fiber_leave();
     }
 
     public static class Tracy {
 
+        private static ConcurrentDictionary<string, IntPtr> fibers = new();
         private static ConcurrentDictionary<string, IntPtr> frames = new();
         private static ConcurrentDictionary<string, IntPtr> plots = new();
 
@@ -89,12 +97,12 @@ namespace tracy {
                 };
             });
             var context = TracyNative.___tracy_emit_zone_begin(ref (sourceLocations[index]), 1);
-            // SendMessage($"start zone id {context.id} at thread {System.Threading.Thread.CurrentThread.ManagedThreadId}");
+            SendMessage($"start zone id {context.id} at thread {System.Threading.Thread.CurrentThread.ManagedThreadId}");
             return context;
         }
 
         private static void ProfileEnd(TracyNative.___tracy_c_zone_context context) {
-            // SendMessage($"finish zone id {context.id} at thread {System.Threading.Thread.CurrentThread.ManagedThreadId}");
+            SendMessage($"finish zone id {context.id} at thread {System.Threading.Thread.CurrentThread.ManagedThreadId}");
             TracyNative.___tracy_emit_zone_end(context);
         }
 
@@ -114,6 +122,19 @@ namespace tracy {
                 }
             });
             TracyNative.___tracy_emit_frame_mark(cName);
+        }
+
+        public static void EnterFiber(string name) {
+            var cName = fibers.GetOrAdd(name, (n) => {
+                lock (fibers) {
+                    return Marshal.StringToHGlobalAnsi(n);
+                }
+            });
+            TracyNative.___tracy_fiber_enter(cName);
+        }
+
+        public static void ExitFiber() {
+            TracyNative.___tracy_fiber_leave();
         }
 
         public static void SendMessage(string message) {

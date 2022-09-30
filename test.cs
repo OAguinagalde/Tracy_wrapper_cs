@@ -7,8 +7,15 @@ public static class TestingProgram {
     }
 
     public static void Main(string[] args) {
+        
         while (true) {
+
+            Tracy.EnterFiber("MyFiber");
+            doSomeAsyncWork_WORKS(10).Wait();
+            Tracy.ExitFiber();
             
+            doSomeAsyncWork_FAILS(10).Wait();
+
             var manualProfile = Tracy.ProfileManually("manualProfile");
             doSomeWork(30);
             manualProfile.End();
@@ -29,5 +36,18 @@ public static class TestingProgram {
 
             Tracy.FrameMark("LoopEnd");
         }
+    }
+
+    public static async System.Threading.Tasks.Task doSomeAsyncWork_WORKS(int ms) {
+        {
+            using var _ = Tracy.ProfileScope();
+            await System.Threading.Tasks.Task.Delay(ms);
+        }
+        
+    }
+
+    public static async System.Threading.Tasks.Task doSomeAsyncWork_FAILS(int ms) {
+        using var _ = Tracy.ProfileScope();
+        await System.Threading.Tasks.Task.Delay(ms);
     }
 }

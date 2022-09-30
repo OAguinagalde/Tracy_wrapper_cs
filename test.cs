@@ -8,7 +8,11 @@ public static class TestingProgram {
 
     public static void Main(string[] args) {
         while (true) {
+            
+            var manualProfile = Tracy.ProfileManually("manualProfile");
             doSomeWork(30);
+            manualProfile.End();
+
             using var _1 = Tracy.ProfileScope("testProfiledScope");
 
             if (true) {

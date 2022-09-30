@@ -84,13 +84,17 @@ namespace tracy {
                 lock (srcLocIndices) {
                     var i = srcLocCnt++;
                     sourceLocations[i] = new TracyNative.___tracy_source_location_data(name, color, function, file, line);
+                    SendMessage($"Created SRCLOC at sourceLocations[{i}] with key [{file}{line}]");
                     return i;
                 };
             });
-            return TracyNative.___tracy_emit_zone_begin(ref (sourceLocations[index]), 1);
+            var context = TracyNative.___tracy_emit_zone_begin(ref (sourceLocations[index]), 1);
+            // SendMessage($"start zone id {context.id} at thread {System.Threading.Thread.CurrentThread.ManagedThreadId}");
+            return context;
         }
 
         private static void ProfileEnd(TracyNative.___tracy_c_zone_context context) {
+            // SendMessage($"finish zone id {context.id} at thread {System.Threading.Thread.CurrentThread.ManagedThreadId}");
             TracyNative.___tracy_emit_zone_end(context);
         }
 
@@ -124,6 +128,10 @@ namespace tracy {
             return new ProfiledScope(name, color, function, file, line);
         }
 
+        public static ManualProfile ProfileManually(string name = null, uint color = 0, [CallerMemberName] string function = "unknown", [CallerFilePath] string file = "unknown", [CallerLineNumber] uint line = 0) {
+            return new ManualProfile(name, color, function, file, line);
+        }
+
         // Notes Oscar: based on this https://stu.dev/defer-with-csharp8/
         // Also, this: https://stackoverflow.com/questions/2412981/if-my-struct-implements-idisposable-will-it-be-boxed-when-used-in-a-using-statem/2413844#2413844
         // Which measn that we can do this `using var ignoredVar = new ProfileScope(ref loc);` without boxing the struct, so when Dispose is called, its called on
@@ -137,6 +145,26 @@ namespace tracy {
             }
 
             public void Dispose() {
+                if (ctx.active == 0 && ctx.id == 0) {
+                    throw new Exception(
+                        "If you are seeing this Exception, it might mean that you created a ProfileScope like this " +
+                        "`new ProfileScope()`, but that is not allowed. Instead, if you want a default name for the scope, " +
+                        "call it like this `new ProfileScope(null)`."
+                    );
+                }
+                Tracy.ProfileEnd(ctx);
+            }
+        }
+
+        public readonly struct ManualProfile {
+            
+            private readonly TracyNative.___tracy_c_zone_context ctx;
+            
+            public ManualProfile(string name = null, uint color = 0, [CallerMemberName] string function = "unknown", [CallerFilePath] string file = "unknown", [CallerLineNumber] uint line = 0) {
+                ctx = Tracy.ProfileStart(name, color, function, file, line);
+            }
+
+            public void End() {
                 if (ctx.active == 0 && ctx.id == 0) {
                     throw new Exception(
                         "If you are seeing this Exception, it might mean that you created a ProfileScope like this " +

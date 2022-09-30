@@ -2,6 +2,8 @@
 
 This is not a fully featured wrapper, and more of a minimal setup using the Tracy profiler in your C# project. Also, it assumes 64 bit systems.
 
+Currently it does not work on async scopes.
+
 Use the API like this (`test.cs`).
 
 ```cs
@@ -15,7 +17,11 @@ public static class TestingProgram {
 
     public static void Main(string[] args) {
         while (true) {
+            
+            var manualProfile = Tracy.ProfileManually("manualProfile");
             doSomeWork(30);
+            manualProfile.End();
+
             using var _1 = Tracy.ProfileScope("testProfiledScope");
 
             if (true) {

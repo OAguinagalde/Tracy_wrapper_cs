@@ -1,3 +1,8 @@
+param (
+    [Switch] $DebugSymbols
+)
+# Defaults to release mode
+
 if (!(test-path tracy)) {
     
     if (!(get-command git -ErrorAction SilentlyContinue)) {
@@ -12,7 +17,12 @@ if (!(test-path tracy)) {
 }
 
 if (get-command cl -ErrorAction SilentlyContinue) {
-    cl /O2 /D_USRDLL /D_WINDLL build-tracy-as-dll.cpp /nologo /link /DLL /OUT:.\tracy.dll
+    if ($DebugSymbols) {
+        cl /DEBUG /Zi /D_USRDLL /D_WINDLL build-tracy-as-dll.cpp /nologo /link /DLL /OUT:.\tracy.dll
+    }
+    else {
+        cl /O2 /D_USRDLL /D_WINDLL build-tracy-as-dll.cpp /nologo /link /DLL /OUT:.\tracy.dll
+    }
 }
 else {
     throw "cl.exe not in path! You can build the dll with 'cl /D_USRDLL /D_WINDLL build-tracy-as-dll.cpp /nologo /link /DLL /OUT:.\tracy.dll'"
